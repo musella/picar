@@ -1,0 +1,103 @@
+{% extends "layout.html" %}
+{% block body %}
+
+<script type="text/javascript">
+  $(function() {
+    var send = function() {
+        var func = $(this).attr("id");
+	$.get($SCRIPT_ROOT + '/' + func );
+    };
+    $('.cmd').bind('mousedown', send);
+  }
+  )
+</script>
+<style>
+
+
+html, body {
+	height:100%;
+	margin:0;
+}
+
+.video_feed {
+   position:absolute;
+}
+
+.main {
+	height:100%;
+	width:100%;
+}
+
+.container {
+	display:table;
+	height:100%;
+	margin:0 auto;
+	width: 360px;
+}
+
+.center {
+	display:table-cell;
+	height:480px;
+	width: 360px;
+	vertical-align:middle;
+}
+
+.arrow-top, .arrow-down {
+	clear:both;
+	text-align:center;
+	width:100%;
+}
+
+.middle-row {
+	float: left;
+	margin:20px 0;
+	width:360px;
+}
+
+.arrow-left {
+	float: left;
+	margin-right:20px;
+}
+
+.stop {
+	float: left;
+}
+
+.arrow-right {
+	float: left;
+	margin-left:20px;
+}
+
+a {
+ opacity:0.80;
+}
+
+a:hover {
+ opacity:1;
+}
+
+.credits {
+	margin-top:40px;
+	text-align:center;
+}
+
+</style>
+
+<h1>Pi Car</h1>
+
+<div class="main">
+ <div class="container">
+ <div class="center">
+ <img class="video_feed" src="{{ url_for('video_feed') }}">
+   <div class="arrow-top"><a class="cmd" id="forward" href="#"><img src="/static/arrow-top.png" alt="forward"></a></div>
+   <div class="middle-row">
+    <div class="arrow-left"><a class="cmd" id="left" href="#"><img src="/static/arrow-left.png" alt="left"></a></div>
+    <div class="stop"><a  class="cmd" id="stop" href="#"><img src="/static/btn-stop.png" alt="stop"></a></div>
+    <div class="arrow-right"><a class="cmd" id="right" href="#"><img src="/static/arrow-right.png" alt="right"></a></div>
+   </div>
+   <div class="arrow-down"><a class="cmd" id="reverse" href="#"><img src="/static/arrow-down.png" alt="reverse"></a></div>
+  </div>
+ </div>
+</div>
+{% endblock %}
+
