@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 
 from flask import Flask, render_template, Response
 import os
@@ -15,22 +15,27 @@ def index():
 @app.route('/forward')
 def forward():
     car.forward()
+    return ""
 
 @app.route('/reverse')
 def reverse():
     car.reverse()
+    return ""
 
 @app.route('/left')
 def left():
     car.left()
+    return ""
 
 @app.route('/right')
 def right():
     car.right()
+    return ""
 
 @app.route('/stop')
 def stop():
     car.stop()
+    return ""
         
 def gen(camera):
     while True:
@@ -48,8 +53,14 @@ def video_feed():
 
 # ------------------------------------------------------------------------------------------        
 if __name__ == "__main__":
+    import os
+    pid=os.getpid()
+    with open('pid','w+') as pidfile:
+        pidfile.write('%s\n' % pid)
+        pidfile.close()
     car()
     try:
-        app.run(threaded=True)
+        app.run(threaded=True,host='0.0.0.0',port=8000)
     finally:
+        car.quit()
         del car

@@ -3,7 +3,10 @@ import RPi.GPIO as GPIO
 
 import time
 
-from threading import Event
+from threading import Thread, Event
+from myclapp import MyCLApp
+from optparse import make_option
+from pprint import pprint
 
 
 # ---------------------------------------------------------------------------------
@@ -22,7 +25,9 @@ class Motors:
         GPIO.setup(self.in3, GPIO.OUT)
         GPIO.setup(self.in4, GPIO.OUT)
 
-        self.direction = self.stop
+        self.moving = Event()
+        self.stop()
+        # self.direction = self.stop
 
     def sleep(self,tsleep):
         time.sleep(tsleep)
@@ -34,12 +39,14 @@ class Motors:
         GPIO.output(self.in4, in4)
         
     
-    def reverse(self,sleep=1.5):
+    def reverse(self):
         self.send(False,True,False,True)
+        self.moving.set()
         self.direction = self.reverse
         
-    def forward(self,sleep=1.5):
+    def forward(self):
         self.send(True,False,True,False)
+        self.moving.set()
         self.direction = self.forward
         
     def turn_right(self,deg=90.):
@@ -50,6 +57,7 @@ class Motors:
         
     def stop(self):
         self.send(False,False,False,False)
+        self.moving.clear()
         self.direction = self.stop
 
 
@@ -57,7 +65,7 @@ class Motors:
 # ---------------------------------------------------------------------------------
 class Sensors:
 
-    def __init__(self,trg=37,echos=[13,16]):
+    def __init__(self,trg=26,echos=[13,16]):
         self.trg=trg
 
         GPIO.setup(self.trg, GPIO.OUT)
@@ -119,43 +127,69 @@ class Sensors:
 class PiCar(MyCLApp):
     
     def __init__(self):
-        super(Test,self).__init__(option_list=[make_option("-k","--enable-camera",action="store_true",dest="enable_camera",
+        super(PiCar,self).__init__(option_list=[make_option("-k","--enable-camera",action="store_true",dest="enable_camera",
                                                            default=False),
                                                make_option("-t","--turn-step",action="store",dest="turn_step",type="float",
+                                                           default=30.),
+                                               make_option("-s","--safe-distance",action="store",dest="safe_distance",type="float",
                                                            default=30.),
                                            ]
         )
 
         GPIO.setmode(GPIO.BCM)
-
+        self.camera = None
+        self.motors = None
+        self.sensors = None
+        self.mon = None
+        self.doquit = Event()
+        self.done  = Event()
+        
     def __del__(self):
         GPIO.cleanup()
         if self.camera:
             del self.camera
-        
+            
     def run(self):
         self.load_config()
         pprint( self.options_ ) 
         pprint( self.args_ )
 
         self.turnStep = self.options_.turn_step
+        self.safeDistance = self.options_.safe_distance
         self.camera = None
         if self.options_.enable_camera:
             from camera import VideoCamera
             self.camera = VideoCamera(classify=True,fmrate=60)
 
-
+            
         self.motors = Motors()
         self.sensors = Sensors()
-
-        ## run moniotoring thread
+        
+        self.mon = Thread(target=self.monitor)
+        self.doquit.clear()
+        self.done.clear()
+        self.mon.start()
         
     def monitor(self):
-        pass
+        while not self.doquit.is_set():
+            self.motors.moving.wait()
+            if self.doquit.is_set():
+                self.done.set()
+                return
+            distances = self.sensors.run()
+            towards = distances[0] if motors.direction == motors.forward else distances[1]
+            if towards < self.safeDistance:
+                self.stop()
+        self.done.set()
+        
+    def quit(self):
+        self.doquit.set()
+        self.motors.moving.set()
+        self.done.wait()
         
     def forward(self):
         self.motors.forward()
-
+        
     def reverse(self):
         self.motors.reverse()
         
@@ -164,11 +198,11 @@ class PiCar(MyCLApp):
 
     def left(self):
         self.motors.turn_left()
-        self.motors.sleep(turnStep*motors.degToTime)
+        self.motors.sleep(self.turnStep*self.motors.degToTime)
         self.motors.direction()
 
     def right(self):
         self.motors.turn_right()
-        self.motors.sleep(turnStep*motors.degToTime)
+        self.motors.sleep(self.turnStep*self.motors.degToTime)
         self.motors.direction()
         

@@ -1,0 +1,32 @@
+#!/bin/bash
+# /etc/init.d/picar
+
+### BEGIN INIT INFO
+# Provides:          picar
+# Required-Start:    $remote_fs $syslog
+# Required-Stop:     $remote_fs $syslog
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Example initscript
+# Description:       This service is used to manage a servo
+### END INIT INFO
+
+
+case "$1" in 
+    start)
+        echo "Starting picar"
+	cd /home/pi/picar/
+        sudo -u pi ./picar >& /home/pi/picar/log &
+	chown pi:pi /home/pi/picar/log
+        ;;
+    stop)
+        echo "Stopping picar"
+        kill $(cat /home/pi/picar/pid)
+        ;;
+    *)
+        echo "Usage: /etc/init.d/picar start|stop"
+        exit 1
+        ;;
+esac
+
+exit 0
