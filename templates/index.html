@@ -56,27 +56,12 @@ html, body {
 	vertical-align:middle;
 }
 
-.arrow-top, .arrow-down {
-	clear:both;
-        text-align:center;
-        padding-left: 33%;
-        padding-right: 33%;
-	width:33%;
-}
-
-.aa-middle-row {
-	float: left;
-        margin-left: 5%;
-        margin-right: 5%;
-	width:90%;
-}
-
 .arrow-left {
 float: left;
 width:33%;
 }
 
-.stop {
+.arrow-centre {
 float: left;
 width:33%;
 }
@@ -106,13 +91,21 @@ a:hover {
   <img class="video_feed" src="{{ url_for('video_feed') }}"/>
   <div class="container">
     <div class="center">
-      <div class="arrow-top"><a class="cmd" id="forward"><img class="button" src="/static/arrow-top.png" alt="forward"></a></div>
+      <div class="top-row">
+	<div class="arrow-left"><a class="cmd" id="leftL"><img class="button" src="/static/arrow-leftL.png" alt="leftL"></a></div>
+	<div class="arrow-centre"><a class="cmd" id="forward"><img class="button" src="/static/arrow-top.png" alt="forward"></a></div>
+	<div class="arrow-right"><a class="cmd" id="rightL"><img class="button" src="/static/arrow-rightL.png" alt="rightL"></a></div>
+      </div>
       <div class="middle-row">
 	<div class="arrow-left"><a class="cmd" id="left"><img class="button" src="/static/arrow-left.png" alt="left"></a></div>
-	<div class="stop"><a  class="cmd" id="stop"><img class="button" src="/static/btn-stop.png" alt="stop"></a></div>
+	<div class="arrow-centre"><a  class="cmd" id="stop"><img class="button" src="/static/btn-stop.png" alt="stop"></a></div>
 	<div class="arrow-right"><a class="cmd" id="right"><img class="button" src="/static/arrow-right.png" alt="right"></a></div>
       </div>
-      <div class="arrow-down"><a class="cmd" id="reverse"><img class="button" src="/static/arrow-down.png" alt="reverse"></a></div>
+      <div class="bottom-row">
+	<div class="arrow-left"><a class="cmd" id="leftU"><img class="button" src="/static/arrow-leftU.png" alt="leftU"></a></div>
+	<div class="arrow-centre"><a class="cmd" id="reverse"><img class="button" src="/static/arrow-down.png" alt="reverse"></a></div>
+	<div class="arrow-right"><a class="cmd" id="rightU"><img class="button" src="/static/arrow-rightU.png" alt="rightU"></a></div>
+      </div>
     </div>
   </div>
 </div>

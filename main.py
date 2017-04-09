@@ -32,6 +32,26 @@ def right():
     car.right()
     return ""
 
+@app.route('/leftL')
+def leftL():
+    car.leftL()
+    return ""
+
+@app.route('/rightL')
+def rightL():
+    car.rightL()
+    return ""
+
+@app.route('/leftU')
+def leftU():
+    car.leftU()
+    return ""
+
+@app.route('/rightU')
+def rightU():
+    car.rightU()
+    return ""
+
 @app.route('/stop')
 def stop():
     car.stop()

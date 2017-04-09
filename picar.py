@@ -18,7 +18,7 @@ class Motors:
 
     ## def __init__(self,in1=27,in2=22,in3=5,in4=6,degToTime=0.64/90.):
     ## def __init__(self,in1=4,in2=17,in3=27,in4=22,degToTime=0.64/90.):
-    def __init__(self,in1=18,in2=23,in3=24,in4=25,degToTime=0.64/90.):
+    def __init__(self,in1=18,in2=23,in3=24,in4=25,degToTime=0.62/90.):
 
         self.in1 = in1
         self.in2 = in2
@@ -32,7 +32,9 @@ class Motors:
         GPIO.setup(self.in4, GPIO.OUT)
 
         self.can_move = Event()        
+        self.turning = Event()        
         self.moving = Queue()
+        self.turning.clear()
         self.can_move.set()
         self.stop()
 
@@ -48,7 +50,8 @@ class Motors:
         
 
     def brake(self):
-        self.send(False,False,False,False)
+        if not self.turning.is_set():
+            self.send(False,False,False,False)
         self.can_move.clear()
 
     def unbrake(self):
@@ -72,11 +75,22 @@ class Motors:
         self.moving.put(True)
         self.direction = self.forward
         
-    def turn_right(self,deg=90.):
+    def turn_right(self,angle=None):
+        self.turning.set()
         self.send(False,True,True,False)
-        
-    def turn_left(self,deg=90.):
+        if angle:
+            self.sleep(angle*self.degToTime)
+            self.direction()
+        self.turning.clear()
+
+    def turn_left(self,angle=None):
+        self.turning.set()
         self.send(True,False,False,True)
+        if angle:
+            self.sleep(angle*self.degToTime)
+            self.direction()
+        self.turning.clear()
+            
         
     def stop(self):
         self.send(False,False,False,False)
@@ -217,7 +231,6 @@ class PiCar(MyCLApp):
 
     def closest_object(self,direction):
         self.distances = self.sensors.run()
-        ## print(self.distances)
         towards = self.distances[direction]
         return towards
     
@@ -234,11 +247,9 @@ class PiCar(MyCLApp):
                 if towards > self.safeDistance:
                     nsafe += 1
             if nsafe < 1:
-                 self.brake()
-                 ## print("readings:")
-                 ## for dist in self.sensors.distances:
-                 ##     pprint(dist.readings)
-                 print("Distances :", self.distances)
+                if self.motors.can_move.is_set():
+                    print("Distances :", self.distances)
+                self.brake()
             else:
                 if not self.motors.can_move.is_set():
                     print("Distances: ", self.distances)
@@ -267,12 +278,20 @@ class PiCar(MyCLApp):
         self.motors.stop()
 
     def left(self):
-        self.motors.turn_left()
-        self.motors.sleep(self.turnStep*self.motors.degToTime)
-        self.motors.direction()
+        self.motors.turn_left(self.turnStep)
 
     def right(self):
-        self.motors.turn_right()
-        self.motors.sleep(self.turnStep*self.motors.degToTime)
-        self.motors.direction()
+        self.motors.turn_right(self.turnStep)
         
+    def leftL(self):
+        self.motors.turn_left(90.)
+
+    def rightL(self):
+        self.motors.turn_right(90.)
+
+    def leftU(self):
+        self.motors.turn_left(180.)
+        
+    def rightU(self):
+        self.motors.turn_right(180.)
+
