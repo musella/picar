@@ -7,8 +7,9 @@ eye_cascade = cv2.CascadeClassifier('../../share_local/opencv-3.2.0/data/haarcas
 class VideoCamera(object):
     def __init__(self, classify=False,fmrate=60):
         self.video = cv2.VideoCapture(0)
+        # self.video.set(cv2.cv.CV_CAP_PROP_FPS, fmrate)
+        # self.picam = PiCamera()
         self.classify = classify
-        self.video.set(cv2.cv.CV_CAP_PROP_FPS, fmrate)
 
     def __del__(self):
         self.video.release()

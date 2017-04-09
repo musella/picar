@@ -129,16 +129,19 @@ class Tester:
         
         gpio.setmode(gpio.BOARD)
         for pin in self.pins:
-            print pin
+            ## print pin
             gpio.setup(pin,gpio.OUT)
 
     def on(self):
         for pin in self.pins:
+            print("setting pin", pin)
             gpio.output(pin,gpio.HIGH)
+            raw_input("")
+            gpio.output(pin,gpio.LOW)
 
     def off(self):
         for pin in self.pins:
-            gpio.output(pin,gpio.HIGH)
+            gpio.output(pin,gpio.LOW)
             
     
 
@@ -191,19 +194,18 @@ if __name__ == "__main__":
 
     ### global sensor
     ### ## sensor = Sensor(16,18)
-    sensors = Sensors()
+    # sensors = Sensors()
      
-    for i in range(5):
-         print(sensors.run())
-         time.sleep(1)
+    ## for i in range(5):
+    ##      print(sensors.run())
+    ##      time.sleep(1)
          
      
 
     
-    ## tester = Tester()
-    ## tester.on()
-    
-    
-    ## gpio.cleanup()
+    tester = Tester()
+    tester.on()
+    raw_input()
+    gpio.cleanup()
 
     

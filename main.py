@@ -59,7 +59,11 @@ if __name__ == "__main__":
         pidfile.write('%s\n' % pid)
         pidfile.close()
     car()
+    from threading import Thread
+    ## thread = Thread(target=lambda: app.run(threaded=True,host='0.0.0.0',port=8000))
     try:
+        ## thread.start()
+        ## thread.join()
         app.run(threaded=True,host='0.0.0.0',port=8000)
     finally:
         car.quit()

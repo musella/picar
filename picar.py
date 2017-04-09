@@ -4,6 +4,10 @@ import RPi.GPIO as GPIO
 import time
 
 from threading import Thread, Event
+try:
+    from Queue import Queue
+except:
+    from queue import Queue
 from myclapp import MyCLApp
 from optparse import make_option
 from pprint import pprint
@@ -12,7 +16,9 @@ from pprint import pprint
 # ---------------------------------------------------------------------------------
 class Motors:
 
-    def __init__(self,in1=27,in2=22,in3=5,in4=6,degToTime=0.64/90.):
+    ## def __init__(self,in1=27,in2=22,in3=5,in4=6,degToTime=0.64/90.):
+    ## def __init__(self,in1=4,in2=17,in3=27,in4=22,degToTime=0.64/90.):
+    def __init__(self,in1=18,in2=23,in3=24,in4=25,degToTime=0.64/90.):
 
         self.in1 = in1
         self.in2 = in2
@@ -25,10 +31,12 @@ class Motors:
         GPIO.setup(self.in3, GPIO.OUT)
         GPIO.setup(self.in4, GPIO.OUT)
 
-        self.moving = Event()
+        self.can_move = Event()        
+        self.moving = Queue()
+        self.can_move.set()
         self.stop()
-        # self.direction = self.stop
 
+        
     def sleep(self,tsleep):
         time.sleep(tsleep)
         
@@ -38,15 +46,30 @@ class Motors:
         GPIO.output(self.in3, in3)
         GPIO.output(self.in4, in4)
         
-    
+
+    def brake(self):
+        self.send(False,False,False,False)
+        self.can_move.clear()
+
+    def unbrake(self):
+        if not self.can_move.is_set():
+            self.can_move.set()
+            self.direction()
+        
     def reverse(self):
-        self.send(False,True,False,True)
-        self.moving.set()
+        if self.can_move.is_set():
+            self.send(False,True,False,True)
+        ## else:
+        ##     self.send(False,False,False,False)
+        self.moving.put(True)
         self.direction = self.reverse
         
     def forward(self):
-        self.send(True,False,True,False)
-        self.moving.set()
+        if self.can_move.is_set():
+            self.send(True,False,True,False)
+        ## else:
+        ##     self.send(False,False,False,False)
+        self.moving.put(True)
         self.direction = self.forward
         
     def turn_right(self,deg=90.):
@@ -57,7 +80,8 @@ class Motors:
         
     def stop(self):
         self.send(False,False,False,False)
-        self.moving.clear()
+        self.moving.put(False)
+        # self.moving.clear()
         self.direction = self.stop
 
 
@@ -65,60 +89,80 @@ class Motors:
 # ---------------------------------------------------------------------------------
 class Sensors:
 
-    def __init__(self,trg=26,echos=[13,16]):
+    ## def __init__(self,trg=26,echos=[13,16]):
+    def __init__(self,trg=10,echos=[9,11]):
         self.trg=trg
 
         GPIO.setup(self.trg, GPIO.OUT)
 
-        self.distances=[ Sensors.TimeToDistance(echo) for echo in echos ]
-
+        self.distances=[ Sensors.TimeToDistance(pin, sens_id) for sens_id,pin in enumerate(echos) ]
+        self.last = None
         
     class TimeToDistance:
 
-        def __init__(self,echo):
+        def __init__(self,echo,sens_id):
             self.echo=echo
+            self.sens_id=sens_id
             GPIO.setup(self.echo, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-            self.done  = Event()
-
-        def start(self):
-            self.nosig = time.time()
-            while GPIO.input(self.echo) == 1:
-                self.sig = time.time()
-            self.done.set()
-            GPIO.remove_event_detect(self.echo)
+            
+            self.readings = []
+            
+        def read(self,time):
+            val = GPIO.input(self.echo)
+            self.readings.append( (time,val) )
+            return val
         
         def arm(self):
-            self.done.clear()
-            GPIO.add_event_detect(self.echo, GPIO.RISING, callback=lambda x: self.start())
-        
-        def measure(self):
-            self.done.wait()
-        
-            tl = self.sig - self.nosig
-            self._distance = tl / 0.000058
-            return self._distance
+            self.readings = []
 
-    def arm(self):
-        for dist in self.distances:
-            dist.arm()
+        def measure(self,t0):
+            if len(self.readings) < 2:
+                return 0.
+            if self.readings[0][1] == 1:
+                sig = t0
+            else:
+                while len(self.readings) > 0 and self.readings[0][1] == 0:
+                    sig = self.readings.pop(0)[0]
 
-    def measure(self):
-        return [ dist.measure() for dist in self.distances ]
-    
+            nosig = sig
+            while len(self.readings) > 0 and self.readings[0][1] == 1 :
+                nosig = self.readings.pop(0)[0]
+            tl = nosig - sig
+            distance = tl * 340. * 0.5 * 100.
+            return distance
 
-    def trigger(self):
-        GPIO.output(self.trg, False)
-        time.sleep(0.00001)
 
-        GPIO.output(self.trg, True)
-        time.sleep(0.00001)
-        GPIO.output(self.trg, False)
-        
     def run(self):
         
-        self.arm()
-        self.trigger()
-        return self.measure()
+        for dist in self.distances:
+            dist.arm()
+        
+        now = time.time()
+        measDeltaT = 0.05
+        minDeltaT = 2.*measDeltaT
+        if self.last:
+            deltaT = now - self.last
+            if deltaT < minDeltaT:
+                time.sleep(minDeltaT-deltaT)
+        self.last = now
+            
+        GPIO.output(self.trg, True)
+        time.sleep(0.0001)
+        t0 = time.time()
+        t1 = t0
+        GPIO.output(self.trg, False)
+        anyup = False
+        while t1 - t0 < measDeltaT:
+            vsum = 0
+            for dist in self.distances:
+                vsum += dist.read(t1)
+            if not anyup:
+                anyup = vsum > 0
+            ## print(vsum,anyup)
+            if anyup and vsum == 0: break
+            t1 = time.time()
+
+        return [ dist.measure(t0) for dist in self.distances ]
 
 
 
@@ -158,9 +202,10 @@ class PiCar(MyCLApp):
         self.safeDistance = self.options_.safe_distance
         self.camera = None
         if self.options_.enable_camera:
-            from camera import VideoCamera
-            self.camera = VideoCamera(classify=True,fmrate=60)
-
+            ## from camera import VideoCamera
+            ## self.camera = VideoCamera(classify=True,fmrate=60)
+            from camera_pi import Camera
+            self.camera = Camera() ## VideoCamera(classify=True,fmrate=60)
             
         self.motors = Motors()
         self.sensors = Sensors()
@@ -169,22 +214,41 @@ class PiCar(MyCLApp):
         self.doquit.clear()
         self.done.clear()
         self.mon.start()
-        
+
+    def closest_object(self,direction):
+        self.distances = self.sensors.run()
+        ## print(self.distances)
+        towards = self.distances[direction]
+        return towards
+    
     def monitor(self):
+        moving = self.motors.moving.get()
         while not self.doquit.is_set():
-            self.motors.moving.wait()
-            if self.doquit.is_set():
-                self.done.set()
-                return
-            distances = self.sensors.run()
-            towards = distances[0] if motors.direction == motors.forward else distances[1]
-            if towards < self.safeDistance:
-                self.stop()
+            while ( not self.motors.moving.empty() ) or ( not moving ):
+                moving = self.motors.moving.get()
+            direction = 0 if self.motors.direction == self.motors.forward else 1
+            nchecks = 1
+            nsafe = 0
+            for check in xrange(nchecks):
+                towards = self.closest_object(direction)
+                if towards > self.safeDistance:
+                    nsafe += 1
+            if nsafe < 1:
+                 self.brake()
+                 ## print("readings:")
+                 ## for dist in self.sensors.distances:
+                 ##     pprint(dist.readings)
+                 print("Distances :", self.distances)
+            else:
+                if not self.motors.can_move.is_set():
+                    print("Distances: ", self.distances)
+                self.unbrake()
+                
         self.done.set()
         
     def quit(self):
         self.doquit.set()
-        self.motors.moving.set()
+        self.motors.moving.put(None)
         self.done.wait()
         
     def forward(self):
@@ -192,6 +256,12 @@ class PiCar(MyCLApp):
         
     def reverse(self):
         self.motors.reverse()
+
+    def brake(self):
+        self.motors.brake()
+
+    def unbrake(self):
+        self.motors.unbrake()
         
     def stop(self):
         self.motors.stop()

@@ -39,7 +39,7 @@ class MyCLApp(object):
     # -------------------------------------------------------------------------------        
     def run_shell(self,cmd,bkg=False,log=None):
         
-        print cmd
+        print(cmd)
         if log:
             if log in self.logs_:
                 self.logs_[log].close()
