@@ -56,7 +56,17 @@ def rightU():
 def stop():
     car.stop()
     return ""
-        
+
+@app.route('/selfDrive')
+def selfDrive():
+    car.selfDrive()
+    return ""
+
+@app.route('/manualDrive')
+def manualDrive():
+    car.manualDrive()
+    return ""
+
 def gen(camera):
     while True:
         frame = camera.get_frame()
