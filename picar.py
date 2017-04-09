@@ -1,6 +1,4 @@
 
-import RPi.GPIO as GPIO
-
 import time
 
 from threading import Thread, Event, Semaphore
@@ -16,6 +14,10 @@ import random
 
 from math import asin, pi
 
+## import RPi.GPIO as GPIO
+import pigpio
+mypi = pigpio.pi()
+
 # ---------------------------------------------------------------------------------
 class Motors:
 
@@ -28,10 +30,14 @@ class Motors:
         self.in4 = in4
         self.degToTime = degToTime
         
-        GPIO.setup(self.in1, GPIO.OUT)
-        GPIO.setup(self.in2, GPIO.OUT)
-        GPIO.setup(self.in3, GPIO.OUT)
-        GPIO.setup(self.in4, GPIO.OUT)
+        ## GPIO.setup(self.in1, GPIO.OUT)
+        ## GPIO.setup(self.in2, GPIO.OUT)
+        ## GPIO.setup(self.in3, GPIO.OUT)
+        ## GPIO.setup(self.in4, GPIO.OUT)
+        mypi.set_mode(self.in1, pigpio.OUTPUT)
+        mypi.set_mode(self.in2, pigpio.OUTPUT)
+        mypi.set_mode(self.in3, pigpio.OUTPUT)
+        mypi.set_mode(self.in4, pigpio.OUTPUT)
 
         self.can_move = Event()        
         self.turning = Event()        
@@ -40,6 +46,13 @@ class Motors:
         self.can_move.set()
         self.stop()
 
+    # -----------------------------------------------------------------------------
+    def __del__(self):
+        mypi.set_mode(self.in1, pigpio.INPUT)
+        mypi.set_mode(self.in2, pigpio.INPUT)
+        mypi.set_mode(self.in3, pigpio.INPUT)
+        mypi.set_mode(self.in4, pigpio.INPUT)
+        
         
     # -----------------------------------------------------------------------------
     def sleep(self,tsleep):
@@ -47,10 +60,14 @@ class Motors:
         
     # -----------------------------------------------------------------------------
     def send(self,in1,in2,in3,in4):
-        GPIO.output(self.in1, in1)
-        GPIO.output(self.in2, in2)
-        GPIO.output(self.in3, in3)
-        GPIO.output(self.in4, in4)
+        ## GPIO.output(self.in1, in1)
+        ## GPIO.output(self.in2, in2)
+        ## GPIO.output(self.in3, in3)
+        ## GPIO.output(self.in4, in4)
+        mypi.write(self.in1, in1)
+        mypi.write(self.in2, in2)
+        mypi.write(self.in3, in3)
+        mypi.write(self.in4, in4)
         
     # -----------------------------------------------------------------------------
     def brake(self):
@@ -118,11 +135,15 @@ class Sensors:
     def __init__(self,trg=10,echos=[9,11]):
         self.trg=trg
 
-        GPIO.setup(self.trg, GPIO.OUT)
+        ## GPIO.setup(self.trg, GPIO.OUT)
+        mypi.set_mode(self.trg, pigpio.OUTPUT)
 
         self.distances=[ Sensors.TimeToDistance(pin, sens_id) for sens_id,pin in enumerate(echos) ]
         self.last = None
         self.lock = Semaphore(1)
+
+    def __del__(self):
+        mypi.set_mode(self.trg, pigpio.INPUT)
         
     # -----------------------------------------------------------------------------
     class TimeToDistance:
@@ -130,12 +151,15 @@ class Sensors:
         def __init__(self,echo,sens_id):
             self.echo=echo
             self.sens_id=sens_id
-            GPIO.setup(self.echo, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+            ## GPIO.setup(self.echo, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+            mypi.set_mode(self.echo, pigpio.INPUT)
+            mypi.set_pull_up_down(self.echo, pigpio.PUD_UP)
             
             self.readings = []
             
         def read(self,time):
-            val = GPIO.input(self.echo)
+            ## val = GPIO.input(self.echo)
+            val = mypi.read(self.echo)
             self.readings.append( (time,val) )
             return val
         
@@ -176,11 +200,13 @@ class Sensors:
                 time.sleep(minDeltaT-deltaT)
         self.last = now
             
-        GPIO.output(self.trg, True)
+        ## GPIO.output(self.trg, True)
+        mypi.write(self.trg, True)
         time.sleep(0.0001)
         t0 = time.time()
         t1 = t0
-        GPIO.output(self.trg, False)
+        ## GPIO.output(self.trg, False)
+        mypi.write(self.trg, False)
         anyup = False
         while t1 - t0 < measDeltaT:
             vsum = 0
@@ -288,7 +314,7 @@ class PiCar(MyCLApp):
                      ]
         )
 
-        GPIO.setmode(GPIO.BCM)
+        ## GPIO.setmode(GPIO.BCM)
         self.camera = None
         self.motors = None
         self.sensors = None
@@ -300,7 +326,7 @@ class PiCar(MyCLApp):
         
     # -----------------------------------------------------------------------------
     def __del__(self):
-        GPIO.cleanup()
+        ## GPIO.cleanup()
         if self.camera:
             del self.camera
             
