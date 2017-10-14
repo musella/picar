@@ -16,11 +16,15 @@ start() {
     cd /home/pi/picar/
     sudo -u pi ./picar >& /home/pi/picar/log &
     chown pi:pi /home/pi/picar/log
+    ## uv4l -nopreview --auto-video_nr --driver raspicam --encoding mjpeg --width 640 --height 480 --framerate 30 --server-option '--port=9090' --server-option '--max-queued-connections=30' --server-option '--max-streams=25' --server-option '--max-threads=29'
+    uv4l -nopreview --auto-video_nr --driver raspicam   --quality=20 --server-option '--port=9090' --server-option '--max-queued-connections=30' --server-option '--max-streams=25' --server-option '--max-threads=29' --server-option '--enable-control-panel' --object-detection --min-object-size 80 80 --main-classifier /usr/share/uv4l/raspicam/lbpcascade_frontalface.xml  --secondary-classifier  /usr/share/opencv/haarcascades/haarcascade_fullbody.xml  --object-detection-mode accurate_detection --encoding h264 --width 640 --height 480 --framerate 15 
+    ## --encoding mjpeg --width 160 --height 120 --framerate 30
 }
 
 stop() {
     echo "Stopping picar"
     kill $(cat /home/pi/picar/pid)
+    pkill -f uv4l
 }
 
 case "$1" in 

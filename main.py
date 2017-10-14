@@ -12,6 +12,31 @@ car = PiCar()
 def index():
     return render_template('index.html')
 
+@app.route('/camCentre')
+def camCentre():
+    car.camCentre()
+    return ""
+
+@app.route('/panL')
+def panL():
+    car.panL()
+    return ""
+
+@app.route('/panR')
+def panR():
+    car.panR()
+    return ""
+
+@app.route('/tiltD')
+def tiltD():
+    car.tiltD()
+    return ""
+
+@app.route('/tiltU')
+def tiltU():
+    car.tiltU()
+    return ""
+
 @app.route('/forward')
 def forward():
     car.forward()

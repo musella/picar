@@ -1,7 +1,7 @@
 
 import time
 
-from threading import Thread, Event, Semaphore
+from threading import Thread, Event, Semaphore, Timer
 try:
     from Queue import Queue
 except:
@@ -19,10 +19,76 @@ import pigpio
 mypi = pigpio.pi()
 
 # ---------------------------------------------------------------------------------
+class Servos:
+
+    # -----------------------------------------------------------------------------
+    def __init__(self,
+                 pan=13,pan_range=[1200,1800],pan_calib=[1565.,13.],
+                 tilt=12,tilt_range=[750,1900],tilt_calib=[1630.,13.]):
+
+        ## 1565.0, 1630.0
+        
+        self.pan = pan
+        self.pan_range = pan_range
+        self.pan_calib = pan_calib
+        self.tilt = tilt
+        self.tilt_range = tilt_range
+        self.tilt_calib = tilt_calib
+
+        mypi.set_mode(self.pan,pigpio.ALT0)
+        mypi.set_mode(self.tilt,pigpio.ALT0)
+
+        mypi.set_PWM_frequency(self.pan,50.)
+        mypi.set_PWM_frequency(self.tilt,50.)
+
+        self.home = (1500,1500)
+        self.goto(None,None)
+        time.sleep(0.1)
+        self.goto(0.,0.)
+        
+    # -----------------------------------------------------------------------------
+    def goto(self,pan,tilt):
+
+        print("goto",pan,tilt)
+
+        if pan != None and tilt != None:
+            pan =  self.pan_calib[0] + pan * self.pan_calib[1]
+            pan = min(max(pan,self.pan_range[0]),self.pan_range[1])
+            
+            tilt =  self.tilt_calib[0] + tilt * self.tilt_calib[1]
+            tilt = min(max(tilt,self.tilt_range[0]),self.tilt_range[1])
+        else:
+            pan,tilt = self.home
+            
+        print("goto -->",pan,tilt)
+
+        mypi.set_servo_pulsewidth(self.pan,pan)
+        mypi.set_servo_pulsewidth(self.tilt,tilt)
+
+        ## time.sleep(0.01)
+
+        self.timer = Timer(2.,self.pwm_off)
+        self.timer.start()
+        
+        self.pos = ((pan-self.pan_calib[0])/self.pan_calib[1],(tilt-self.tilt_calib[0])/self.tilt_calib[1])
+        print(self.pos)
+        
+    # -----------------------------------------------------------------------------
+    def move_by(self,deltaPan,deltaTilt):
+        self.goto( self.pos[0]+deltaPan, self.pos[1]+deltaTilt ) 
+
+    # -----------------------------------------------------------------------------
+    def pwm_off(self):
+        print("turning pwm off")
+        mypi.set_servo_pulsewidth(self.pan,0)
+        mypi.set_servo_pulsewidth(self.tilt,0)
+
+        
+# ---------------------------------------------------------------------------------
 class Motors:
 
     # -----------------------------------------------------------------------------
-    def __init__(self,in1=18,in2=23,in3=24,in4=25,degToTime=0.635/90.):
+    def __init__(self,in1=18,in2=23,in3=24,in4=25,degToTime=1.1/90.):# ,degToTime=0.635/90.):
 
         self.in1 = in1
         self.in2 = in2
@@ -60,10 +126,6 @@ class Motors:
         
     # -----------------------------------------------------------------------------
     def send(self,in1,in2,in3,in4):
-        ## GPIO.output(self.in1, in1)
-        ## GPIO.output(self.in2, in2)
-        ## GPIO.output(self.in3, in3)
-        ## GPIO.output(self.in4, in4)
         mypi.write(self.in1, in1)
         mypi.write(self.in2, in2)
         mypi.write(self.in3, in3)
@@ -132,13 +194,17 @@ class Sensors:
 
     ## def __init__(self,trg=26,echos=[13,16]):
     # -----------------------------------------------------------------------------
-    def __init__(self,trg=10,echos=[9,11]):
+    ## def __init__(self,trg=10,echos=[9,11]):
+    def __init__(self,trg=10,front=[17,27,22],back=[9,11,5]):#echos=[17,27,22,9,11,5]):
         self.trg=trg
 
         ## GPIO.setup(self.trg, GPIO.OUT)
         mypi.set_mode(self.trg, pigpio.OUTPUT)
 
-        self.distances=[ Sensors.TimeToDistance(pin, sens_id) for sens_id,pin in enumerate(echos) ]
+        ## self.distances=[ Sensors.TimeToDistance(pin, sens_id) for sens_id,pin in enumerate(echos) ]
+        self.distances=[ Sensors.TimeToDistance(pin, sens_id) for sens_id,pin in enumerate(front+back) ]
+        self.front = self.distances[:len(front)]
+        self.back  = self.distances[len(front):]
         self.last = None
         self.lock = Semaphore(1)
 
@@ -184,7 +250,7 @@ class Sensors:
 
 
     # -----------------------------------------------------------------------------
-    def run(self):
+    def run(self,raw=False):
 
         self.lock.acquire()
 
@@ -218,20 +284,26 @@ class Sensors:
             if anyup and vsum == 0: break
             t1 = time.time()
 
-        distances = [ dist.measure(t0) for dist in self.distances ]
+        ## distances = [ dist.measure(t0) for dist in self.distances ]
+        front = [ dist.measure(t0) for dist in self.front ]
+        back  = [ dist.measure(t0) for dist in self.back ]
         self.lock.release()
-        return distances
+        ## return distances
+        if raw:
+            return front,back
+        else:
+            return [ min(front),min(back) ]
 
 
 # ---------------------------------------------------------------------------------
 class Pilot:
 
     # -----------------------------------------------------------------------------
-    def __init__(self,car,flip_rate=0.2,turn_rate=0.6,step=0.5):
+    def __init__(self,car,flip_rate=0.05,turn_rate=0.6,step=0.5):
 
         self.car = car
-        self.flip_cdf = flip_rate*step
-        self.turn_cdf = (turn_rate+flip_rate)*step
+        self.flip_cdf = flip_rate
+        self.turn_cdf = (turn_rate+flip_rate)
         self.step = step
 
         self.doquit = Event()
@@ -271,7 +343,6 @@ class Pilot:
             self.car.motors.turn_right(angle)
         elif angle < 0.:
             self.car.motors.turn_left(-angle)
-                    
         
     # -----------------------------------------------------------------------------
     def drive(self):
@@ -307,10 +378,12 @@ class PiCar(MyCLApp):
         super(PiCar,self).__init__(
             option_list=[make_option("-k","--enable-camera",action="store_true",
                                      dest="enable_camera",default=False),
-                         make_option("-t","--turn-step",action="store",dest="turn_step",
+                         make_option("-T","--turn-step",action="store",dest="turn_step",
                                      type="float",default=30.),
+                         make_option("-S","--servos-step",action="store",dest="servos_step",
+                                     type="float",default=5.),
                          make_option("-s","--safe-distance",action="store",
-                                     dest="safe_distance",type="float",default=30.),
+                                     dest="safe_distance",type="float",default=25.),
                      ]
         )
 
@@ -318,44 +391,48 @@ class PiCar(MyCLApp):
         self.camera = None
         self.motors = None
         self.sensors = None
+        self.servos = None
         self.mon = None
         self.doquit = Event()
-        self.done   = Event()
         self.pilot = Pilot(self)
 
         
-    # -----------------------------------------------------------------------------
-    def __del__(self):
-        ## GPIO.cleanup()
-        if self.camera:
-            del self.camera
+    ## # -----------------------------------------------------------------------------
+    ## def __del__(self):
+    ##     ## GPIO.cleanup()
+    ##     if self.camera:
+    ##         del self.camera
             
     # -----------------------------------------------------------------------------
     def run(self):
         self.load_config()
         pprint( self.options_ ) 
         pprint( self.args_ )
-
+            
         self.turnStep = self.options_.turn_step
+        self.motors = Motors()
+
         self.safeDistance = self.options_.safe_distance
+        self.sensors = Sensors()
+
+        self.servosStep = self.options_.servos_step
+        self.servos = Servos()
+        
         self.camera = None
         if self.options_.enable_camera:
             ## from camera import VideoCamera
             ## self.camera = VideoCamera(classify=True,fmrate=60)
             from camera_pi import Camera
             self.camera = Camera() ## VideoCamera(classify=True,fmrate=60)
-            
-        self.motors = Motors()
-        self.sensors = Sensors()
-        
+
         self.mon = Thread(target=self.monitor)
         self.doquit.clear()
-        self.done.clear()
         self.mon.start()
 
     # -----------------------------------------------------------------------------
     def closest_object(self,direction):
-        self.distances = self.sensors.run()
+        self.raw_distances = self.sensors.run(raw=True)
+        self.distances = list(map(min,self.raw_distances))
         towards = self.distances[direction]
         return towards
     
@@ -366,37 +443,39 @@ class PiCar(MyCLApp):
             while ( not self.motors.moving.empty() ) or ( not moving ):
                 moving = self.motors.moving.get()
             direction = 0 if self.motors.direction == self.motors.forward else 1
-            nchecks = 1
+            nchecks = 2
             nsafe = 0
             for check in xrange(nchecks):
                 towards = self.closest_object(direction)
                 if towards > self.safeDistance:
                     nsafe += 1
+                else:
+                    nbelow = reduce(lambda x,y: x+y, map(lambda x: x<self.safeDistance, self.raw_distances))
+                    if nbelow > 1:
+                        nsafe = 0
+                        break
+                    print("Unsafe :", self.raw_distances)
             if nsafe < 1:
-                if self.motors.can_move.is_set():
-                    print("Distances :", self.distances)
                 self.brake()
+                if self.motors.can_move.is_set():
+                    print("Distances :", self.raw_distances)
             else:
                 if not self.motors.can_move.is_set():
-                    print("Distances: ", self.distances)
+                    print("Distances: ", self.raw_distances)
                 self.unbrake()
                 
-        self.done.set()
-        
     # -----------------------------------------------------------------------------
     def quit(self):
         self.doquit.set()
         self.motors.moving.put(None)
-        self.done.wait()
+        self.mon.join()
         
     # -----------------------------------------------------------------------------
     def forward(self):
-        # self.manualDrive()
         self.motors.forward()
         
     # -----------------------------------------------------------------------------
     def reverse(self):
-        # self.manualDrive()
         self.motors.reverse()
 
     # -----------------------------------------------------------------------------
@@ -447,3 +526,22 @@ class PiCar(MyCLApp):
             self.pilot.stop()
 
         
+    # -----------------------------------------------------------------------------
+    def camCentre(self):
+        self.servos.goto(0.,0.)
+
+    # -----------------------------------------------------------------------------
+    def panL(self):
+        self.servos.move_by(self.servosStep,0.)
+
+    # -----------------------------------------------------------------------------
+    def panR(self):
+        self.servos.move_by(-self.servosStep,0.)
+
+    # -----------------------------------------------------------------------------
+    def tiltU(self):
+        self.servos.move_by(0.,-self.servosStep)
+
+    # -----------------------------------------------------------------------------
+    def tiltD(self):
+        self.servos.move_by(0,+self.servosStep)

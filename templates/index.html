@@ -23,61 +23,110 @@
 </script>
 <style>
 
-
 html, body {
-	height:100%;
-	margin:0;
+    height: 100%;
+    margin: 0;
 }
-
-// img { width:100%; }
-.button { width:100%; }
-
+.button {
+    width: 100%;
+}
 .video_feed {
-   position:absolute;
-   width:inherit;
+    float: left;
+    width: 50%;
 }
-
 .main {
-	// height:100%;
-	width:100%;
+    width: 100%;
 }
-
 .container {
-	display:table;
-        width: 70%;
-        padding-left: 15%;
-        // float:right;
+    display: table;
+    float: left;
+    padding-left: 0;
+    width: 20%;
 }
-
 .center {
-	display:table-cell;
-	height:100%;
-	width: 100%;
-	vertical-align:middle;
+//    display: table-cell;
+    display: table;
+    height: 100%;
+    vertical-align: middle;
+    width: 100%;
 }
-
 .arrow-left {
-float: left;
-width:33%;
+    display: table-cell;
+//    float: left;
+    width: 33%;
 }
-
 .arrow-centre {
-float: left;
-width:33%;
+    display: table-cell;
+//    float: left;
+    width: 33%;
 }
-
 .arrow-right {
-float: left;
-width:33%;
+    display: table-cell;
+//    float: left;
+    width: 33%;
 }
-
 a {
- opacity:0.5;
+    opacity: 0.5;
+}
+a:hover {
+    opacity: 1;
 }
 
-a:hover {
- opacity:1;
-}
+
+//// html, body {
+//// 	height:100%;
+//// 	margin:0;
+//// }
+//// 
+//// // img { width:100%; }
+//// .button { width:100%; }
+//// 
+//// .video_feed {
+////    // position:absolute;
+////    width:inherit;
+//// }
+//// 
+//// .main {
+//// 	// height:100%;
+//// 	width:100%;
+//// }
+//// 
+//// .container {
+//// 	display:table;
+////         width: 70%;
+////         padding-left: 15%;
+////         // float:right;
+//// }
+//// 
+//// .center {
+//// 	display:table-cell;
+//// 	height:100%;
+//// 	width: 100%;
+//// 	vertical-align:middle;
+//// }
+//// 
+//// .arrow-left {
+//// float: left;
+//// width:33%;
+//// }
+//// 
+//// .arrow-centre {
+//// float: left;
+//// width:33%;
+//// }
+//// 
+//// .arrow-right {
+//// float: left;
+//// width:33%;
+//// }
+//// 
+//// a {
+////  opacity:0.5;
+//// }
+//// 
+//// a:hover {
+////  opacity:1;
+//// }
 
 </style>
 
@@ -89,8 +138,15 @@ a:hover {
     <button id="large">+</button>
     <button class="cmd" id="selfDrive">auto</button>
     <button class="cmd" id="manualDrive">manual</button>
+    <!--
+    <button class="cmd" id="camCentre">cam centre</button>
+    <button class="cmd" id="panL">cam left</button>
+    <button class="cmd" id="panR">cam right</button>
+    <button class="cmd" id="tiltU">cam up</button>
+    <button class="cmd" id="tiltD">cam down</button>
+    -->
   </div>
-  <img class="video_feed" src="{{ url_for('video_feed') }}"/>
+  <img class="video_feed" src="http://raspberrypi:9090/stream/video.mjpeg" width="640" height="480"/>
   <div class="container">
     <div class="center">
       <div class="top-row">
@@ -109,7 +165,26 @@ a:hover {
 	<div class="arrow-right"><a class="cmd" id="rightU"><img class="button" src="/static/arrow-rightU.png" alt="rightU"></a></div>
       </div>
     </div>
+    <div class="center">
+      <div class="top-row">
+	<div class="arrow-left"></div>
+	<div class="arrow-centre"><a class="cmd" id="tiltU"><img class="button" src="/static/camera-up.png" alt="camera up"></a></div>
+	<div class="arrow-right"></div>
+      </div>
+      <div class="middle-row">
+	<div class="arrow-left"><a class="cmd" id="panL"><img class="button" src="/static/camera-left.png" alt="camera left"></a></div>
+	<div class="arrow-centre"><a  class="cmd" id="camCentre"><img class="button" src="/static/camera-center.png" alt="camera center"></a></div>
+	<div class="arrow-right"><a class="cmd" id="panR"><img class="button" src="/static/camera-right.png" alt="camera right"></a></div>
+      </div>
+      <div class="bottom-row">
+	<div class="arrow-left"></div>
+	<div class="arrow-centre"><a class="cmd" id="tiltD"><img class="button" src="/static/camera-down.png" alt="camera down"></a></div>
+	<div class="arrow-right"></div>
+      </div>
+    </div>
   </div>
+
+    
 </div>
 {% endblock %}
 
