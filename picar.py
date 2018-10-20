@@ -14,6 +14,8 @@ import random
 
 from math import asin, pi
 
+from copy import deepcopy as copy
+
 ## import RPi.GPIO as GPIO
 import pigpio
 mypi = pigpio.pi()
@@ -88,7 +90,7 @@ class Servos:
 class Motors:
 
     # -----------------------------------------------------------------------------
-    def __init__(self,in1=18,in2=23,in3=24,in4=25,degToTime=1.1/90.):# ,degToTime=0.635/90.):
+    def __init__(self,in1=18,in2=23,in3=24,in4=25,degToTime=1.1/90.,record=False):# ,degToTime=0.635/90.):
 
         self.in1 = in1
         self.in2 = in2
@@ -108,6 +110,9 @@ class Motors:
         self.can_move = Event()        
         self.turning = Event()        
         self.moving = Queue()
+        self.record = record
+        if self.record:
+            self.records = Queue()
         self.turning.clear()
         self.can_move.set()
         self.stop()
@@ -136,12 +141,17 @@ class Motors:
         if not self.turning.is_set():
             self.send(False,False,False,False)
         self.can_move.clear()
-
+        if self.record and not self.turning.is_set():
+            self.records.put( (time.time(),[0.,0.,0.,0.,1.]) )
+        
     # -----------------------------------------------------------------------------
     def unbrake(self):
         if not self.can_move.is_set():
             self.can_move.set()
             self.direction()
+        if self.record and not self.turning.is_set():
+            fwd = float(self.direction == self.forward)
+            self.records.put( (time.time(),[fwd,1.-fwd,0.,0.,0.]) )
         
     # -----------------------------------------------------------------------------
     def reverse(self):
@@ -151,6 +161,8 @@ class Motors:
         ##     self.send(False,False,False,False)
         self.moving.put(True)
         self.direction = self.reverse
+        if self.record:
+            self.records.put( (time.time(),[0.,1.,0.,0.,0.]) )
         
     # -----------------------------------------------------------------------------
     def forward(self):
@@ -160,24 +172,38 @@ class Motors:
         ##     self.send(False,False,False,False)
         self.moving.put(True)
         self.direction = self.forward
+        if self.record:
+            self.records.put( (time.time(),[1.,0.,0.,0.,0.]) )
         
     # -----------------------------------------------------------------------------
     def turn_right(self,angle=None):
         self.turning.set()
         self.send(False,True,True,False)
         if angle:
+            t1 = time.time()
             self.sleep(angle*self.degToTime)
+            t2 = time.time()
             self.direction()
         self.turning.clear()
+        if self.record:
+            fwd = float(self.direction == self.forward)
+            self.records.put( (t1,[fwd,1.-fwd,angle*self.degToTime,0.,0.]) )
+            self.records.put( (t2,[fwd,1.-fwd,angle*self.degToTime,0.,0.]) )
 
     # -----------------------------------------------------------------------------
     def turn_left(self,angle=None):
         self.turning.set()
         self.send(True,False,False,True)
         if angle:
+            t1 = time.time()
             self.sleep(angle*self.degToTime)
+            t2 = time.time()
             self.direction()
         self.turning.clear()
+        if self.record:
+            fwd = float(self.direction == self.forward)
+            self.records.put( (t1,[fwd,1.-fwd,0.,angle*self.degToTime,0.]) )
+            self.records.put( (t2,[fwd,1.-fwd,0.,angle*self.degToTime,0.]) )
             
         
     # -----------------------------------------------------------------------------
@@ -186,6 +212,8 @@ class Motors:
         self.moving.put(False)
         # self.moving.clear()
         self.direction = self.stop
+        if self.record:
+            self.records.put( (time.time(),[0.,0.,0.,0.,1.]) )
 
 
 
@@ -290,7 +318,7 @@ class Sensors:
         self.lock.release()
         ## return distances
         if raw:
-            return front,back
+            return t0,front,back
         else:
             return [ min(front),min(back) ]
 
@@ -384,6 +412,10 @@ class PiCar(MyCLApp):
                                      type="float",default=5.),
                          make_option("-s","--safe-distance",action="store",
                                      dest="safe_distance",type="float",default=25.),
+                         make_option("-d","--dump-metrics",action="store_true",
+                                     dest="dump_metrics",default=False),
+                         make_option("-v","--verbose",action="store_true",
+                                     dest="verbose",default=False),
                      ]
         )
 
@@ -410,14 +442,25 @@ class PiCar(MyCLApp):
         pprint( self.args_ )
             
         self.turnStep = self.options_.turn_step
-        self.motors = Motors()
+        self.motors = Motors(record=self.options_.dump_metrics)
 
         self.safeDistance = self.options_.safe_distance
         self.sensors = Sensors()
 
         self.servosStep = self.options_.servos_step
         self.servos = Servos()
-        
+
+        self.dumpMetrics = self.options_.dump_metrics
+        if self.dumpMetrics:
+            self.dout = None
+            self.mout = None
+            self.distance_records = Queue()
+            self.dump = Thread(target=self.dump_metrics)
+            self.dump.start()
+            ## self.dump = Timer(2.,self.dump_metrics)
+            ## self.dump.daemon = True
+            ## self.dump.start()
+            
         self.camera = None
         if self.options_.enable_camera:
             ## from camera import VideoCamera
@@ -431,11 +474,60 @@ class PiCar(MyCLApp):
 
     # -----------------------------------------------------------------------------
     def closest_object(self,direction):
-        self.raw_distances = self.sensors.run(raw=True)
+        raw = self.sensors.run(raw=True)
+        self.time = raw[0]
+        self.raw_distances = copy(raw[1:])
         self.distances = list(map(min,self.raw_distances))
         towards = self.distances[direction]
         return towards
-    
+
+    # -----------------------------------------------------------------------------
+    def dump_metrics(self):
+        while not self.doquit.is_set():
+            if self.dout is None:
+                self.dout = open('distance_records.csv','w+')
+                self.dout.write('timestamp,')
+                self.dout.write(','.join( 'front%d' % ii for ii in range(len(self.sensors.front))  ) )
+                self.dout.write(',')
+                self.dout.write(','.join( 'back%d' % ii for ii in range(len(self.sensors.back))  ) )
+                self.dout.write('\n')
+                self.dout.flush()
+            
+            if self.mout is None:
+                self.mout = open('motors.csv','w+')
+                self.mout.write('timestamp,front,reverse,turn_left,turn_right,stop\n')
+                self.mout.flush()
+
+            ## print('reading distances')
+            time_stamps = []
+            records = []
+            while ( not self.distance_records.empty() ):
+                time_stamp, record = self.distance_records.get()
+                time_stamps.append(time_stamp)
+                records.append(record)
+            for time_stamp, record in zip(time_stamps,records):
+                strings = [ str(time_stamp) ] + [ str(front) for front in record[0] ] + [ str(back) for back in record[1] ] 
+                self.dout.write(','.join(strings))
+                self.dout.write('\n')
+            self.dout.flush()
+            ## print(time_stamps,record)
+
+            ## print('reading motors')
+            time_stamps = []
+            records = []
+            while ( not self.motors.records.empty() ):
+                time_stamp, record = self.motors.records.get()
+                time_stamps.append(time_stamp)
+                records.append(record)
+            for time_stamp, record in zip(time_stamps,records):
+                strings = [ str(time_stamp) ] + [ str(idir) for idir in record ]
+                self.mout.write(','.join(strings))
+                self.mout.write('\n')
+            self.mout.flush()
+
+            
+            time.sleep(10.)
+            
     # -----------------------------------------------------------------------------
     def monitor(self):
         moving = self.motors.moving.get()
@@ -447,6 +539,8 @@ class PiCar(MyCLApp):
             nsafe = 0
             for check in xrange(nchecks):
                 towards = self.closest_object(direction)
+                if self.dumpMetrics:
+                    self.distance_records.put( (self.time,self.raw_distances) )
                 if towards > self.safeDistance:
                     nsafe += 1
                 else:
@@ -454,14 +548,17 @@ class PiCar(MyCLApp):
                     if nbelow > 1:
                         nsafe = 0
                         break
-                    print("Unsafe :", self.raw_distances)
+                    if self.options_.verbose:
+                        print("Unsafe :", self.raw_distances)
             if nsafe < 1:
                 self.brake()
                 if self.motors.can_move.is_set():
-                    print("Distances :", self.raw_distances)
+                    if self.options_.verbose:
+                        print("Distances :", self.raw_distances)
             else:
                 if not self.motors.can_move.is_set():
-                    print("Distances: ", self.raw_distances)
+                    if self.options_.verbose:
+                        print("Distances: ", self.raw_distances)
                 self.unbrake()
                 
     # -----------------------------------------------------------------------------
